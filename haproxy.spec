@@ -7,10 +7,11 @@
 %global _hardened_build 1
 
 Name:           haproxy
-Version:        2.0.3
+Version:        2.0.7
 Release:        1%{?dist}
 Summary:        HAProxy reverse proxy for high availability environments
 
+Group:          System Environment/Daemons
 License:        GPLv2+
 
 URL:            http://www.haproxy.org/
@@ -21,16 +22,18 @@ Source3:        %{name}.logrotate
 Source4:        %{name}.sysconfig
 Source5:        halog.1
 
-BuildRequires:  gcc
 BuildRequires:  lua-devel
-BuildRequires:  pcre-devel
+BuildRequires:  pcre2-devel
 BuildRequires:  zlib-devel
 BuildRequires:  openssl-devel
 BuildRequires:  systemd-devel
-BuildRequires:  systemd
+BuildRequires:  systemd-units
 
+	
 Requires(pre):      shadow-utils
-%{?systemd_requires}
+Requires(post):     systemd
+Requires(preun):    systemd
+Requires(postun):   systemd
 
 %description
 HAProxy is a TCP/HTTP reverse proxy which is particularly suited for high
@@ -55,14 +58,14 @@ regparm_opts=
 regparm_opts="USE_REGPARM=1"
 %endif
 
-%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux-glibc" USE_OPENSSL=1 USE_PCRE=1 USE_ZLIB=1 USE_LUA=1 USE_CRYPT_H=1 USE_SYSTEMD=1 USE_LINUX_TPROXY=1 USE_GETADDRINFO=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags} EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"
+%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux-glibc" USE_OPENSSL=1 USE_PCRE2=1 USE_ZLIB=1 USE_LUA=1 USE_CRYPT_H=1 USE_SYSTEMD=1 USE_LINUX_TPROXY=1 USE_GETADDRINFO=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags} EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"
 
 pushd contrib/halog
-%{__make} ${halog} OPTIMIZE="%{optflags} %{build_ldflags}"
+%{__make} ${halog} OPTIMIZE="%{optflags} %{build_ldflags}" LDFLAGS=
 popd
 
 pushd contrib/iprange
-%{__make} iprange OPTIMIZE="%{optflags} %{build_ldflags}"
+%{__make} iprange OPTIMIZE="%{optflags} %{build_ldflags}" LDFLAGS=
 popd
 
 %install
@@ -115,6 +118,7 @@ exit 0
 %systemd_postun_with_restart %{name}.service
 
 %files
+%defattr(-,root,root,-)
 %doc doc/* examples/*
 %doc CHANGELOG README ROADMAP VERSION
 %license LICENSE
@@ -132,6 +136,10 @@ exit 0
 %{_mandir}/man1/*
 
 %changelog
+* Tue Jul 30 2019 Matthias Eliasson <matthias.eliasson@gmail.com> - 2.0.7-1
+- Update to 2.0.7
+- Minor modifications to spec file
+
 * Tue Jul 30 2019 Matthias Eliasson <matthias.eliasson@gmail.com> - 2.0.3-1
 - Update to 2.0.3
 - Enable native Prometheus support
