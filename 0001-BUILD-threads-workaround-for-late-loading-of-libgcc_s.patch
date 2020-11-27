@@ -1,0 +1,97 @@
+From 10c627ab2ebeb0a38ae8df477a5f2d870ad77f7c Mon Sep 17 00:00:00 2001
+From: Willy Tarreau <w@1wt.eu>
+Date: Wed, 9 Sep 2020 17:07:54 +0200
+Subject: [PATCH 1/2] BUILD: threads: better workaround for late loading of
+ libgcc_s
+
+Commit 77b98220e ("BUG/MINOR: threads: work around a libgcc_s issue with
+chrooting") tried to address an issue with libgcc_s being loaded too late.
+But it turns out that the symbol used there isn't present on armhf, thus
+it breaks the build.
+
+Given that the issue manifests itself during pthread_exit(), the safest
+and most portable way to test this is to call pthread_exit(). For this
+we create a dummy thread which exits, during the early boot. This results
+in the relevant library to be loaded if needed, making sure that a later
+call to pthread_exit() will still work. It was tested to work fine under
+linux on the following platforms:
+
+ glibc:
+   - armhf
+   - aarch64
+   - x86_64
+   - sparc64
+   - ppc64le
+
+ musl:
+   - mipsel
+
+Just running the code under strace easily shows the call in the dummy
+thread, for example here on armhf:
+
+  $ strace -fe trace=file ./haproxy -v 2>&1 | grep gcc_s
+  [pid 23055] open("/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+
+The code was isolated so that it's easy to #ifdef it out if needed.
+This should be backported where the patch above is backported (likely
+2.0).
+
+(cherry picked from commit f734ebfac4c406f245347527bd0e5831a251cc61)
+Signed-off-by: Willy Tarreau <w@1wt.eu>
+---
+ src/thread.c | 33 ++++++++++++++++++++++-----------
+ 1 file changed, 22 insertions(+), 11 deletions(-)
+
+diff --git a/src/thread.c b/src/thread.c
+index 5eb68e33a..eeb0e04f4 100644
+--- a/src/thread.c
++++ b/src/thread.c
+@@ -189,6 +189,27 @@ static int thread_cpus_enabled()
+ 	return ret;
+ }
+ 
++/* Depending on the platform and how libpthread was built, pthread_exit() may
++ * involve some code in libgcc_s that would be loaded on exit for the first
++ * time, causing aborts if the process is chrooted. It's harmless bit very
++ * dirty. There isn't much we can do to make sure libgcc_s is loaded only if
++ * needed, so what we do here is that during early boot we create a dummy
++ * thread that immediately exits. This will lead to libgcc_s being loaded
++ * during boot on the platforms where it's required.
++ */
++static void *dummy_thread_function(void *data)
++{
++	pthread_exit(NULL);
++	return NULL;
++}
++
++static inline void preload_libgcc_s(void)
++{
++	pthread_t dummy_thread;
++	pthread_create(&dummy_thread, NULL, dummy_thread_function, NULL);
++	pthread_join(dummy_thread, NULL);
++}
++
+ __attribute__((constructor))
+ static void __thread_init(void)
+ {
+@@ -201,17 +222,7 @@ static void __thread_init(void)
+ 		exit(1);
+ 	}
+ 
+-#if defined(__GNUC__) && (__GNUC__ >= 3) && defined(__GNU_LIBRARY__) && !defined(__clang__)
+-	/* make sure libgcc_s is already loaded, because pthread_exit() may
+-	 * may need it on exit after the chroot! _Unwind_Find_FDE() is defined
+-	 * there since gcc 3.0, has no side effect, doesn't take any argument
+-	 * and seems to be present on all supported platforms.
+-	 */
+-	{
+-		extern void _Unwind_Find_FDE(void);
+-		_Unwind_Find_FDE();
+-	}
+-#endif
++	preload_libgcc_s();
+ 
+ 	thread_cpus_enabled_at_boot = thread_cpus_enabled();
+ 
+-- 
+2.26.2
