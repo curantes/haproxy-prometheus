@@ -7,32 +7,32 @@
 %global _hardened_build 1
 
 Name:           haproxy
-Version:        2.0.7
-Release:        1%{?dist}
+Version:        2.2.3
+Release:        2%{?dist}
 Summary:        HAProxy reverse proxy for high availability environments
 
-Group:          System Environment/Daemons
 License:        GPLv2+
 
 URL:            http://www.haproxy.org/
-Source0:        https://www.haproxy.org/download/2.0/src/haproxy-%{version}.tar.gz
+Source0:        %{url}/download/2.2/src/haproxy-%{version}.tar.gz
 Source1:        %{name}.service
 Source2:        %{name}.cfg
 Source3:        %{name}.logrotate
 Source4:        %{name}.sysconfig
 Source5:        halog.1
 
+Patch0:		0001-BUILD-threads-workaround-for-late-loading-of-libgcc_s.patch
+
+BuildRequires:  gcc
+BuildRequires:  lua-devel
 BuildRequires:  pcre2-devel
 BuildRequires:  zlib-devel
 BuildRequires:  openssl-devel
 BuildRequires:  systemd-devel
-BuildRequires:  systemd-units
+BuildRequires:  systemd
 
-	
 Requires(pre):      shadow-utils
-Requires(post):     systemd
-Requires(preun):    systemd
-Requires(postun):   systemd
+%{?systemd_requires}
 
 %description
 HAProxy is a TCP/HTTP reverse proxy which is particularly suited for high
@@ -50,6 +50,7 @@ availability environments. Indeed, it can:
 
 %prep
 %setup -q
+%patch0 -p1
 
 %build
 regparm_opts=
@@ -57,18 +58,18 @@ regparm_opts=
 regparm_opts="USE_REGPARM=1"
 %endif
 
-%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux-glibc" USE_OPENSSL=1 USE_PCRE2=1 USE_ZLIB=1 USE_CRYPT_H=1 USE_SYSTEMD=1 USE_LINUX_TPROXY=1 USE_GETADDRINFO=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags}" EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"
+%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux-glibc" USE_OPENSSL=1 USE_PCRE2=1 USE_ZLIB=1 USE_LUA=1 USE_CRYPT_H=1 USE_SYSTEMD=1 USE_LINUX_TPROXY=1 USE_GETADDRINFO=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags}" EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"
 
 pushd contrib/halog
-%{__make} ${halog} OPTIMIZE="%{optflags} %{build_ldflags}" LDFLAGS=
+%{__make} ${halog} OPTIMIZE="%{optflags} %{build_ldflags}"
 popd
 
 pushd contrib/iprange
-%{__make} iprange OPTIMIZE="%{optflags} %{build_ldflags}" LDFLAGS=
+%{__make} iprange OPTIMIZE="%{optflags} %{build_ldflags}"
 popd
 
 %install
-%{__make} install-bin DESTDIR=%{buildroot} PREFIX=%{_prefix} TARGET="linux-glibc"
+%{__make} install-bin DESTDIR=%{buildroot} PREFIX=%{_prefix} TARGET="linux2628"
 %{__make} install-man DESTDIR=%{buildroot} PREFIX=%{_prefix}
 
 %{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
@@ -117,7 +118,6 @@ exit 0
 %systemd_postun_with_restart %{name}.service
 
 %files
-%defattr(-,root,root,-)
 %doc doc/* examples/*
 %doc CHANGELOG README ROADMAP VERSION
 %license LICENSE
@@ -135,13 +135,74 @@ exit 0
 %{_mandir}/man1/*
 
 %changelog
-* Tue Jul 30 2019 Matthias Eliasson <matthias.eliasson@gmail.com> - 2.0.7-1
-- Update to 2.0.7
-- Minor modifications to spec file
+* Thu Sep 16 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.3-2
+- Fix build for late loading of libgcc_s
 
-* Tue Jul 30 2019 Matthias Eliasson <matthias.eliasson@gmail.com> - 2.0.3-1
-- Update to 2.0.3
-- Enable native Prometheus support
+* Mon Sep 14 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.3-1
+- Update to 2.2.3 (#1876932)
+
+* Fri Jul 31 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.2-1
+- Update to 2.2.2 (#1862400)
+
+* Mon Jul 27 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.1-1
+- Update to 2.2.1 (#1859846)
+
+* Wed Jul 15 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.0-3
+- Update systemd service file
+
+* Fri Jul 10 2020 Tom Callaway <spot@fedoraproject.org> - 2.2.0-2
+- Fix build against lua 5.4
+
+* Thu Jul 09 2020 Ryan O'Hara <rohara@redhat.com> - 2.2.0-1
+- Update to 2.2.0 (#1854519)
+
+* Mon Jun 15 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.7-1
+- Update to 2.1.7 (#1845001)
+
+* Mon Jun 08 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.6-1
+- Update to 2.1.6 (#1845001)
+
+* Mon Jun 01 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.5-1
+- Update to 2.1.5 (#1841837)
+
+* Thu Apr 02 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.4-1
+- Update to 2.1.4 (CVE-2010-11100, #1820200)
+
+* Mon Mar 16 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.3-2
+- Fix invalid element address calculation (#1801109)
+
+* Wed Feb 12 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.3-1
+- Update to 2.1.3 (#1802233)
+
+* Wed Jan 29 2020 Fedora Release Engineering <releng@fedoraproject.org> - 2.1.2-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_32_Mass_Rebuild
+
+* Thu Jan 02 2020 Ryan O'Hara <rohara@redhat.com> - 2.1.2-1
+- Update to 2.1.2 (#1782472)
+
+* Mon Nov 25 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.10-1
+- Update to 2.0.10 (#1772961)
+
+* Wed Nov 06 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.8-1
+- Update to 2.0.8 (#1764483)
+
+* Mon Oct 21 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.7-2
+- Build with Prometheus exporter service (#1755839)
+
+* Mon Oct 21 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.7-1
+- Update to 2.0.7 (#1742544)
+
+* Fri Sep 13 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.6-1
+- Update to 2.0.6 (#1742544)
+
+* Mon Aug 19 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.5-1
+- Update to 2.0.5 (#1742544)
+
+* Tue Jul 30 2019 Ryan O'Hara <rohara@redhat.com> - 2.0.3-1
+- Update to 2.0.3 (#1690492)
+
+* Tue Jul 30 2019 Ryan O'Hara <rohara@redhat.com> - 1.8.20-3
+- Build with PCRE2 (#1669217)
 
 * Thu Jul 25 2019 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.20-2
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_31_Mass_Rebuild
